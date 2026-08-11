@@ -94,10 +94,9 @@ window.fetch = ((originalFetch) => async (input, options = {}) => { const isProt
 // required when an administrator needs access to document management.
 init = async function initApplication() {
   const documentsResponse = await fetch('/api/documents');
-  const statsResponse = await fetch('/api/stats');
   state.docs = (await documentsResponse.json()).documents || [];
-  state.stats = await statsResponse.json();
-  state.history = state.isAdmin ? ((await (await fetch('/api/history')).json()).history || []) : [];
+  state.stats = {};
+  state.history = [];
   render();
 };
 
@@ -142,7 +141,12 @@ function syncPublicAccessUi() {
       button.id = 'logout';
       button.className = 'logout-btn';
       button.textContent = 'ออกจากระบบ';
-      button.onclick = async () => { await supabaseClient?.auth.signOut(); };
+      button.onclick = () => {
+        state.user = null;
+        state.isAdmin = false;
+        render();
+        supabaseClient?.auth.signOut({ scope: 'local' }).catch(() => {});
+      };
       profile.append(button);
     }
   }
@@ -169,8 +173,10 @@ const originalSyncPublicAccessUi = syncPublicAccessUi;
 syncPublicAccessUi = function syncPublicAccessUiWithoutImport() {
   originalSyncPublicAccessUi();
   document.querySelector('[data-view="upload"]')?.remove();
-  const manageButton = document.querySelector('[data-view="settings"]');
-  if (manageButton) manageButton.lastChild.textContent = 'จัดการเอกสาร';
+  document.querySelector('[data-view="settings"]')?.remove();
+  document.querySelectorAll('.rail-section').forEach(section => {
+    if (section.textContent.trim() === 'ดูแลระบบ') section.remove();
+  });
 };
 
 function formatTableCells(line) {

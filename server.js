@@ -50,7 +50,7 @@ function mapSupabaseDocument(row) {
   return { ...row, id: row.id, title, type, subcategory: row.legal_category || '', file: row.source_path, relative_path: row.source_path, source_file: sourceFile, tags, snippet: content ? `${content.slice(0, 280)}${content.length > 280 ? '…' : ''}` : `ไฟล์ ${sourceFile}`, available: true, record_type: row.record_type, version_status: row.version_status };
 }
 async function supabaseDocuments(query = {}) {
-  const rows = await supabaseRequest('documents?select=*&is_published=eq.true&order=modified_at.desc.nullslast,title.asc&limit=1000');
+  const rows = await supabaseRequest('documents?select=id,title,document_type,legal_category,work_category,record_type,version_status,source_path,source_file,modified_at,metadata&is_published=eq.true&order=modified_at.desc.nullslast,title.asc&limit=1000');
   const docs = rows.map(mapSupabaseDocument);
   const q = String(query.q || '').trim().toLowerCase();
   return docs.filter(doc => (!query.type || query.type === 'ทั้งหมด' || doc.type === query.type) && (!query.subcategory || query.subcategory === 'ทั้งหมด' || doc.subcategory === query.subcategory) && (!query.tag || query.tag === 'ทั้งหมด' || doc.tags.includes(query.tag)) && (!q || `${doc.title} ${doc.source_file} ${doc.content_text || ''} ${doc.tags.join(' ')}`.toLowerCase().includes(q)));
