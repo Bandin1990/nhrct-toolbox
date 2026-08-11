@@ -18,7 +18,7 @@ function loadEnvFile() {
 }
 loadEnvFile();
 
-const root = __dirname;
+const root = path.join(__dirname, 'public');
 if (!process.env.VERCEL) store.syncDocuments();
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY;
