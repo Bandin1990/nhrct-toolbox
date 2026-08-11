@@ -69,7 +69,9 @@ function chunks(text, size = 2800) {
 }
 
 async function run() {
-  const documents = store.listDocuments();
+  const selectedPaths = new Set(process.argv.slice(2).map(value => value.replace(/\\/g, '/')));
+  const documents = store.listDocuments().filter(doc => !selectedPaths.size || selectedPaths.has(doc.relative_path.replace(/\\/g, '/')));
+  if (selectedPaths.size && !documents.length) throw new Error('ไม่พบเอกสารที่ระบุสำหรับนำเข้า');
   let imported = 0;
   let chunkCount = 0;
   let uploaded = 0;

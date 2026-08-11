@@ -87,6 +87,91 @@ readerObserver.observe(document.body, { childList: true, subtree: true });
 function render(){ if(!state.isAdmin&&['upload','settings'].includes(state.view))state.view='ask'; const content=state.view==='ask'?askView():state.view==='library'?libraryView():state.view==='history'?historyView():state.view==='about'?aboutView():adminView(); document.querySelector('#app').innerHTML=appShell(content);bind();syncProfile();syncAdminVisibility();syncAboutLink(); }
 async function init(){ state.docs=(await (await fetch('/api/documents')).json()).documents; state.stats=await (await fetch('/api/stats')).json(); state.history=(await (await fetch('/api/history')).json()).history;render(); }
 window.fetch = ((originalFetch) => async (input, options = {}) => { const isProtected = typeof input === 'string' && (input.startsWith('/api/') || input.startsWith('/files/')); if (!isProtected || !supabaseClient) return originalFetch(input, options); const { data } = await supabaseClient.auth.getSession(); const headers = new Headers(options.headers || {}); if (data.session?.access_token) headers.set('Authorization', `Bearer ${data.session.access_token}`); return originalFetch(input, { ...options, headers }); })(window.fetch.bind(window));
+// Public users can use the knowledge base without an account. Sign-in is only
+// required when an administrator needs access to document management.
+init = async function initApplication() {
+  const documentsResponse = await fetch('/api/documents');
+  const statsResponse = await fetch('/api/stats');
+  state.docs = (await documentsResponse.json()).documents || [];
+  state.stats = await statsResponse.json();
+  state.history = state.isAdmin ? ((await (await fetch('/api/history')).json()).history || []) : [];
+  render();
+};
+
+syncProfile = function syncCurrentProfile() {
+  const profile = $('.profile');
+  if (!profile) return;
+  const avatar = profile.querySelector('.avatar');
+  const name = profile.querySelector('b');
+  if (!state.user) {
+    if (avatar) avatar.textContent = 'ผู้';
+    if (name) name.textContent = 'ผู้ใช้ทั่วไป';
+    return;
+  }
+  const label = state.user.user_metadata?.full_name || state.user.user_metadata?.name || state.user.email?.split('@')[0] || 'ผู้ดูแลระบบ';
+  if (avatar) avatar.textContent = label.trim().slice(0, 1);
+  if (name) name.textContent = label;
+};
+
+function syncPublicAccessUi() {
+  const profile = $('.profile');
+  if (!profile) return;
+  const historyButton = document.querySelector('[data-view="history"]');
+  const historySection = document.querySelector('.history-section');
+  if (historyButton) historyButton.hidden = !state.isAdmin;
+  if (historySection) historySection.hidden = !state.isAdmin;
+  const logout = profile.querySelector('#logout');
+  const adminButton = profile.querySelector('#adminAccess');
+  if (!state.user) {
+    if (logout) logout.remove();
+    if (!adminButton) {
+      const button = document.createElement('button');
+      button.id = 'adminAccess';
+      button.className = 'about-link';
+      button.textContent = 'สำหรับผู้ดูแล';
+      button.onclick = () => renderLogin('เข้าสู่ระบบเพื่อจัดการเอกสารและแก้ไขข้อมูล');
+      profile.append(button);
+    }
+  } else {
+    if (adminButton) adminButton.remove();
+    if (!logout) {
+      const button = document.createElement('button');
+      button.id = 'logout';
+      button.className = 'logout-btn';
+      button.textContent = 'ออกจากระบบ';
+      button.onclick = async () => { await supabaseClient?.auth.signOut(); };
+      profile.append(button);
+    }
+  }
+}
+
+initAuth = async function initPublicAccess() {
+  const configResponse = await fetch('/api/config');
+  const config = await configResponse.json();
+  if (config.supabaseUrl && config.supabaseKey && window.supabase) {
+    supabaseClient = window.supabase.createClient(config.supabaseUrl, config.supabaseKey);
+    const { data } = await supabaseClient.auth.getSession();
+    state.user = data.session?.user || null;
+    if (state.user) {
+      const me = await fetch('/api/me');
+      state.isAdmin = me.ok ? Boolean((await me.json()).isAdmin) : false;
+    }
+    supabaseClient.auth.onAuthStateChange(async (_event, session) => {
+      state.user = session?.user || null;
+      state.isAdmin = false;
+      if (state.user) {
+        const me = await fetch('/api/me');
+        state.isAdmin = me.ok ? Boolean((await me.json()).isAdmin) : false;
+      }
+      await init();
+    });
+  }
+  await init();
+};
+
+queueMicrotask(() => authUiObserver.disconnect());
+const publicAccessObserver = new MutationObserver(syncPublicAccessUi);
+publicAccessObserver.observe(document.querySelector('#app'), { childList: true, subtree: true });
 initAuth();
 const authUiObserver = new MutationObserver(() => { const profile = document.querySelector('.profile'); if (profile && !profile.querySelector('#logout')) { const button = document.createElement('button'); button.id = 'logout'; button.className = 'logout-btn'; button.textContent = 'ออกจากระบบ'; button.onclick = async () => { await supabaseClient.auth.signOut(); }; profile.append(button); } });
 authUiObserver.observe(document.querySelector('#app'), { childList: true, subtree: true });
