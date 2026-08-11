@@ -244,7 +244,7 @@ openDocumentEditor = async function openDocumentEditorWithContent(modal, doc) {
   }
   const originalContent = String(editable.content_text || '').replace(/\r\n/g, '\n').trim();
   reader.innerHTML = `<div class="document-editor"><label>ชื่อเอกสารจริง<input id="editTitle" value="${escapeHtml(editable.title || '')}"></label><label>เนื้อหาเอกสาร<textarea id="editContent" rows="24">${escapeHtml(editable.content_text || '')}</textarea></label><div class="editor-actions"><button class="search-btn" id="saveDocument">บันทึกการแก้ไข</button><button class="link-btn" id="cancelDocumentEdit">ยกเลิก</button></div><p class="reader-note">แก้ชื่อเอกสารจะบันทึกทันที ส่วนการแก้เนื้อหาจะสร้างดัชนี AI ใหม่เฉพาะเมื่อเนื้อหาเปลี่ยนจริง</p></div>`;
-  modal.querySelector('#cancelDocumentEdit').onclick = () => { modal.remove(); openDoc(doc.id); };
+  modal.querySelector('#cancelDocumentEdit').onclick = () => modal.remove();
   modal.querySelector('#saveDocument').onclick = async () => {
     const button = modal.querySelector('#saveDocument');
     const editedContent = modal.querySelector('#editContent').value;
@@ -261,7 +261,6 @@ openDocumentEditor = async function openDocumentEditorWithContent(modal, doc) {
       if (current) current.title = result.title;
       modal.remove();
       await init();
-      openDoc(doc.id);
     } catch (error) {
       button.disabled = false;
       button.textContent = 'บันทึกการแก้ไข';
@@ -269,6 +268,13 @@ openDocumentEditor = async function openDocumentEditorWithContent(modal, doc) {
     }
   };
 };
+
+// Never leave an inert backdrop over the application when a document dialog closes.
+document.addEventListener('click', event => {
+  if (!event.target.closest('.modal-x')) return;
+  event.preventDefault();
+  document.querySelectorAll('.modal-wrap').forEach(modal => modal.remove());
+}, true);
 
 initAuth = async function initPublicAccess() {
   const configResponse = await fetch('/api/config');
