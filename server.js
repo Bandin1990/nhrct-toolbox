@@ -2,7 +2,10 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const url = require('url');
-const store = require('./db');
+const localStoreUnavailable = () => { throw new Error('Supabase is not configured for this deployment'); };
+const store = process.env.VERCEL
+  ? { syncDocuments: () => ({ indexed: 0, removed: 0 }), listDocuments: localStoreUnavailable, stats: localStoreUnavailable, history: localStoreUnavailable, recordSearch: localStoreUnavailable }
+  : require('./db');
 const rag = require('./rag');
 
 function loadEnvFile() {
@@ -137,7 +140,7 @@ async function requireAdmin(req, res) {
   return user;
 }
 
-const server = http.createServer(async (req, res) => {
+const requestHandler = async (req, res) => {
   const parsed = url.parse(req.url, true);
   if (parsed.pathname === '/api/config') return send(res, 200, { supabaseUrl: supabaseUrl || '', supabaseKey: supabaseKey || '' });
   if (parsed.pathname === '/api/me') { const user = await requireAuth(req, res); if (!user) return; return send(res, 200, { id: user.id, email: user.email, isAdmin: isAdmin(user) }); }
@@ -162,6 +165,13 @@ const server = http.createServer(async (req, res) => {
   const requested = parsed.pathname === '/' ? 'index.html' : parsed.pathname.replace(/^\//, ''); const file = safeFile(requested);
   if (!file) return send(res, 404, { error: 'Not found' });
   fs.readFile(file, (err, data) => { if (err) return send(res, 404, { error: 'Not found' }); const ext = path.extname(file); const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8' }; send(res, 200, data, types[ext] || 'application/octet-stream'); });
+};
+const server = http.createServer((req, res) => {
+  requestHandler(req, res).catch(error => {
+    console.error('Request failed:', error);
+    if (!res.headersSent) return send(res, 500, { error: 'Server configuration error', detail: error.message });
+    res.end();
+  });
 });
 if (require.main === module) {
   server.listen(process.env.PORT || 3000, () => console.log(`Sithiprom running at http://localhost:${process.env.PORT || 3000}`));
