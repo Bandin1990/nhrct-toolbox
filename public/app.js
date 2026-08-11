@@ -226,6 +226,45 @@ function wireCitationLinks(root) {
   });
 }
 
+// The document list intentionally excludes full text for speed. Load it only
+// when an authorised user opens the editor, so a save can never replace it
+// with an empty value from the list response.
+openDocumentEditor = async function openDocumentEditorWithContent(modal, doc) {
+  const reader = modal.querySelector('.reader-content');
+  reader.innerHTML = '<div class="result loading">กำลังโหลดเนื้อหาเอกสารเพื่อแก้ไข...</div>';
+  let editable = doc;
+  try {
+    const response = await fetch(`/api/documents/${encodeURIComponent(doc.id)}/content`);
+    const detail = await response.json();
+    if (!response.ok) throw new Error(detail.error || 'ไม่สามารถโหลดเนื้อหาเอกสารได้');
+    editable = { ...doc, ...detail };
+  } catch (error) {
+    reader.innerHTML = `<div class="no-result"><b>เปิดตัวแก้ไขไม่ได้</b><p>${escapeHtml(error.message)}</p></div>`;
+    return;
+  }
+  reader.innerHTML = `<div class="document-editor"><label>ชื่อเอกสารจริง<input id="editTitle" value="${escapeHtml(editable.title || '')}"></label><label>เนื้อหาเอกสาร<textarea id="editContent" rows="24">${escapeHtml(editable.content_text || '')}</textarea></label><div class="editor-actions"><button class="search-btn" id="saveDocument">บันทึกและสร้างดัชนีใหม่</button><button class="link-btn" id="cancelDocumentEdit">ยกเลิก</button></div><p class="reader-note">ระบบจะบันทึกชื่อและเนื้อหา แล้วสร้างดัชนี AI ใหม่สำหรับเอกสารฉบับนี้</p></div>`;
+  modal.querySelector('#cancelDocumentEdit').onclick = () => { modal.remove(); openDoc(doc.id); };
+  modal.querySelector('#saveDocument').onclick = async () => {
+    const button = modal.querySelector('#saveDocument');
+    button.disabled = true;
+    button.textContent = 'กำลังบันทึกและสร้างดัชนี...';
+    try {
+      const response = await fetch(`/api/documents/${encodeURIComponent(doc.id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: modal.querySelector('#editTitle').value, content_text: modal.querySelector('#editContent').value }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.detail || result.error || 'บันทึกไม่สำเร็จ');
+      const current = state.docs.find(item => item.id === doc.id);
+      if (current) current.title = result.title;
+      modal.remove();
+      await init();
+      openDoc(doc.id);
+    } catch (error) {
+      button.disabled = false;
+      button.textContent = 'บันทึกและสร้างดัชนีใหม่';
+      alert(error.message);
+    }
+  };
+};
+
 initAuth = async function initPublicAccess() {
   const configResponse = await fetch('/api/config');
   const config = await configResponse.json();

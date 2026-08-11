@@ -130,7 +130,7 @@ async function requireAuth(req, res) {
 function isAdmin(user) {
   const roles = Array.isArray(user?.app_metadata?.roles) ? user.app_metadata.roles : [];
   const role = user?.app_metadata?.role;
-  const allowList = String(process.env.ADMIN_EMAILS || '').split(',').map(email => email.trim().toLowerCase()).filter(Boolean);
+  const allowList = String(process.env.ADMIN_EMAILS || '').split(/[\s,;]+/).map(email => email.trim().replace(/^["']|["']$/g, '').toLowerCase()).filter(Boolean);
   return role === 'admin' || roles.includes('admin') || allowList.includes(String(user?.email || '').toLowerCase());
 }
 async function requireAdmin(req, res) {
@@ -159,7 +159,7 @@ const requestHandler = async (req, res) => {
   const documentContentMatch = parsed.pathname.match(/^\/api\/documents\/([^/]+)\/content$/);
   if (documentContentMatch) return documentContent(decodeURIComponent(documentContentMatch[1]), res);
   const documentUpdateMatch = parsed.pathname.match(/^\/api\/documents\/([^/]+)$/);
-  if (documentUpdateMatch && req.method === 'PATCH') { const user = await requireAdmin(req, res); if (!user) return; try { return updateDocument(decodeURIComponent(documentUpdateMatch[1]), await readJson(req), res); } catch (error) { return send(res, 400, { error: error.message }); } }
+  if (documentUpdateMatch && req.method === 'PATCH') { const user = await requireAdmin(req, res); if (!user) return; try { return updateDocument(decodeURIComponent(documentUpdateMatch[1]), await readJson(req), res); } catch (error) { console.error('Document update failed:', error); return send(res, 502, { error: 'บันทึกเอกสารหรือสร้างดัชนี AI ไม่สำเร็จ', detail: error.message }); } }
   if (parsed.pathname === '/api/sync' && req.method === 'POST') { const user = await requireAdmin(req, res); if (!user) return; return send(res, 200, store.syncDocuments()); }
   if (parsed.pathname.startsWith('/files/')) { const file = safeFile(decodeURIComponent(parsed.pathname.replace('/files/', ''))); if (!file) return send(res, 404, { error: 'Not found' }); return fs.readFile(file, (err, data) => err ? send(res, 404, { error: 'Not found' }) : send(res, 200, data, 'application/pdf')); }
   const requested = parsed.pathname === '/' ? 'index.html' : parsed.pathname.replace(/^\//, ''); const file = safeFile(requested);
