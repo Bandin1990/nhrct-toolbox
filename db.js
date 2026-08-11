@@ -4,7 +4,7 @@ const { DatabaseSync } = require('node:sqlite');
 const zlib = require('zlib');
 const { execFileSync } = require('child_process');
 
-const root = __dirname;
+const root = process.env.VERCEL ? path.join('/tmp', 'nhrc-toolbox') : __dirname;
 const dataDir = path.join(root, 'data');
 fs.mkdirSync(dataDir, { recursive: true });
 const db = new DatabaseSync(path.join(dataDir, 'sithiprom.sqlite'));

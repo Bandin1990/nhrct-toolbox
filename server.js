@@ -15,8 +15,8 @@ function loadEnvFile() {
 }
 loadEnvFile();
 
-const root = store.root;
-store.syncDocuments();
+const root = __dirname;
+if (!process.env.VERCEL) store.syncDocuments();
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY;
 const supabaseDataKey = process.env.SUPABASE_SERVICE_ROLE_KEY || supabaseKey;
@@ -163,4 +163,8 @@ const server = http.createServer(async (req, res) => {
   if (!file) return send(res, 404, { error: 'Not found' });
   fs.readFile(file, (err, data) => { if (err) return send(res, 404, { error: 'Not found' }); const ext = path.extname(file); const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8' }; send(res, 200, data, types[ext] || 'application/octet-stream'); });
 });
-server.listen(process.env.PORT || 3000, () => console.log(`Sithiprom running at http://localhost:${process.env.PORT || 3000}`));
+if (require.main === module) {
+  server.listen(process.env.PORT || 3000, () => console.log(`Sithiprom running at http://localhost:${process.env.PORT || 3000}`));
+}
+
+module.exports = server;
