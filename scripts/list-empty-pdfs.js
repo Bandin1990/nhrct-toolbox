@@ -1,0 +1,4 @@
+const fs = require('fs');
+const path = require('path');
+for (const line of fs.readFileSync(path.join(__dirname, '..', '.env'), 'utf8').split(/\r?\n/)) { const m = line.match(/^([A-Z0-9_]+)=(.*)$/); if (m) process.env[m[1]] = m[2].replace(/^['"]|['"]$/g, ''); }
+fetch(`${process.env.SUPABASE_URL}/rest/v1/documents?select=title,external_key,content_text&limit=1000`, { headers: { apikey: process.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}` } }).then(r => r.json()).then(rows => console.log(JSON.stringify(rows.filter(row => /\.(pdf|docx|md)$/i.test(row.external_key) && !String(row.content_text || '').trim()).map(row => ({ title: row.title, file: row.external_key })), null, 2))).catch(error => { console.error(error.message); process.exitCode = 1; });

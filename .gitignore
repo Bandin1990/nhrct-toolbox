@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+node_modules/
+*.log
+
+# เอกสารต้นฉบับและฐานข้อมูลเครื่องท้องถิ่นเก็บไว้ใน Supabase Storage/Database
+data/
+กฎหมาย ระเบียบ/
+คู่มือของ กสม/
+KM/

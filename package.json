@@ -1,0 +1,16 @@
+{
+  "name": "nhrc-toolbox",
+  "version": "0.1.0",
+  "private": true,
+  "description": "กล่องเครื่องมือการทำงานสำหรับเจ้าหน้าที่สำนักงาน กสม.",
+  "scripts": {
+    "start": "node server.js",
+    "import:supabase": "node scripts/import-to-supabase.js",
+    "verify:supabase": "node scripts/verify-supabase.js",
+    "embed:gemini": "node scripts/embed-supabase-gemini.js",
+    "audit:pdf": "node scripts/audit-pdfs.js",
+    "hydrate:pdf": "node scripts/hydrate-pdf-text.js",
+    "ocr:gemini": "node scripts/ocr-pdfs-gemini.js",
+    "titles:gemini": "node scripts/normalize-document-titles.js"
+  }
+}
