@@ -73,6 +73,7 @@ askQuestion = async function askQuestionWithProgress(query) {
     if (!data.found) { answerBox.innerHTML = `<div class="no-result"><b>ยังไม่พบหลักฐานที่ตรงพอ</b><p>${escapeHtml(data.message || 'ลองปรับคำถามให้ระบุเรื่อง ขั้นตอน หรือเอกสารที่เกี่ยวข้องมากขึ้น')}</p></div>`; return; }
     const sources = (data.sources || []).map((source, index) => `<article class="evidence"><div class="evidence-title"><span class="citation-badge">${escapeHtml(source.citation || `[${index + 1}]`)}</span><b>${escapeHtml(toArabicDigits(source.title || 'เอกสารอ้างอิง'))}</b></div><p>${escapeHtml(cleanUiText(source.evidence || 'ไม่มีข้อความย่อจากหลักฐาน'))}</p><div class="evidence-foot"><span class="evidence-kind">${escapeHtml(evidenceKind(source))}</span><span class="evidence-actions"><button class="evidence-detail" data-doc-detail="${escapeHtml(source.id)}">ดูรายละเอียด</button><a class="evidence-open" href="/api/documents/${encodeURIComponent(source.id)}/file" target="_blank" rel="noopener">เปิดต้นฉบับ ${glyph('arrow')}</a></span></div></article>`).join('');
     answerBox.innerHTML = `<section class="answer-workspace"><article class="answer-main answer-card"><div class="answer-head"><span class="section-kicker">คำตอบจากเอกสารภายใน</span><span class="answer-query">${escapeHtml(q)}</span></div><div class="result-summary">${formatAnswer(data.answer || 'ยังไม่สามารถเรียบเรียงคำตอบจากหลักฐานได้')}</div></article><aside class="answer-sources"><div class="sources-head"><span class="section-kicker">ตรวจสอบย้อนกลับ</span><h3>เอกสารอ้างอิง</h3><span>${data.sources.length} รายการ</span></div>${sources}</aside></section>`;
+    wireCitationLinks(answerBox);
     answerBox.querySelectorAll('[data-doc-detail]').forEach(button => { button.onclick = () => { const doc = state.docs.find(item => item.id === button.dataset.docDetail); if (doc) openDoc(doc.id); }; });
   } catch (error) { answerBox.innerHTML = `<div class="no-result"><b>ระบบตอบคำถามไม่ได้</b><p>${escapeHtml(error.message)}</p></div>`; }
   finally { clearInterval(progressTimer); if (askButton) { askButton.disabled = false; askButton.textContent = askButton.dataset.originalLabel || 'ให้ผู้ช่วยเรียบเรียงคำตอบ'; } }
@@ -84,7 +85,7 @@ function bind(){ document.querySelectorAll('[data-view]').forEach(x=>x.onclick=(
 document.addEventListener('keydown', event => { const input = event.target?.closest?.('#query'); if (!input || event.isComposing) return; if ((event.key === 'Enter' || event.code === 'NumpadEnter') && !event.shiftKey) { event.preventDefault(); event.stopPropagation(); askQuestion(input.value.trim()); } }, true);
 const readerObserver = new MutationObserver(() => watchReaderActions());
 readerObserver.observe(document.body, { childList: true, subtree: true });
-function render(){ if(!state.isAdmin&&['upload','settings'].includes(state.view))state.view='ask'; const content=state.view==='ask'?askView():state.view==='library'?libraryView():state.view==='history'?historyView():state.view==='about'?aboutView():adminView(); document.querySelector('#app').innerHTML=appShell(content);bind();syncProfile();syncAdminVisibility();syncAboutLink(); }
+function render(){ if(!state.isAdmin&&['upload','settings'].includes(state.view))state.view='ask'; const content=state.view==='ask'?askView():state.view==='library'?libraryView():state.view==='history'?historyView():state.view==='about'?aboutView():adminView(); document.querySelector('#app').innerHTML=appShell(content);bind();syncProfile();syncAdminVisibility();syncPublicAccessUi();syncAboutLink(); }
 async function init(){ state.docs=(await (await fetch('/api/documents')).json()).documents; state.stats=await (await fetch('/api/stats')).json(); state.history=(await (await fetch('/api/history')).json()).history;render(); }
 window.fetch = ((originalFetch) => async (input, options = {}) => { const isProtected = typeof input === 'string' && (input.startsWith('/api/') || input.startsWith('/files/')); if (!isProtected || !supabaseClient) return originalFetch(input, options); const { data } = await supabaseClient.auth.getSession(); const headers = new Headers(options.headers || {}); if (data.session?.access_token) headers.set('Authorization', `Bearer ${data.session.access_token}`); return originalFetch(input, { ...options, headers }); })(window.fetch.bind(window));
 // Public users can use the knowledge base without an account. Sign-in is only
@@ -143,6 +144,74 @@ function syncPublicAccessUi() {
       profile.append(button);
     }
   }
+}
+
+// Keep the public header anonymous. Only an authenticated administrator is named.
+syncProfile = function syncCurrentProfile() {
+  const profile = $('.profile');
+  if (!profile) return;
+  const identity = profile.querySelectorAll('.bell, .avatar, b, .profile > span:last-of-type');
+  if (!state.user) {
+    identity.forEach(element => { element.hidden = true; });
+    return;
+  }
+  identity.forEach(element => { element.hidden = false; });
+  const label = state.user.user_metadata?.full_name || state.user.user_metadata?.name || state.user.email?.split('@')[0] || 'ผู้ดูแลระบบ';
+  const avatar = profile.querySelector('.avatar');
+  const name = profile.querySelector('b');
+  if (avatar) avatar.textContent = label.trim().slice(0, 1);
+  if (name) name.textContent = label;
+};
+
+const originalSyncPublicAccessUi = syncPublicAccessUi;
+syncPublicAccessUi = function syncPublicAccessUiWithoutImport() {
+  originalSyncPublicAccessUi();
+  document.querySelector('[data-view="upload"]')?.remove();
+};
+
+function formatTableCells(line) {
+  return String(line || '').trim().replace(/^\|/, '').replace(/\|$/, '').split(/(?<!\\)\|/).map(cell => cell.trim().replace(/\\\|/g, '|'));
+}
+
+function formatAnswerInline(value) {
+  return escapeHtml(value)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/__(.+?)__/g, '<strong>$1</strong>')
+    .replace(/\[(\d+)\]/g, (_, number) => `<a class="citation-link" href="#citation-source-${number}" aria-label="ไปยังเอกสารอ้างอิง ${number}">[${number}]</a>`);
+}
+
+formatAnswer = function formatRichAnswer(value) {
+  const normalized = cleanUiText(value).replace(/`/g, '');
+  return normalized.split(/\n\s*\n/).map(block => {
+    const lines = block.split('\n').map(line => line.trim()).filter(Boolean);
+    if (!lines.length) return '';
+    const separator = formatTableCells(lines[1]);
+    const isTable = lines.length >= 3 && separator.length > 0 && separator.every(cell => /^:?-{3,}:?$/.test(cell));
+    if (isTable) {
+      const headers = formatTableCells(lines[0]);
+      const rows = lines.slice(2).filter(line => line.includes('|')).map(formatTableCells).filter(row => row.some(Boolean));
+      if (headers.length && rows.length) {
+        return `<div class="answer-table-wrap"><table class="answer-table"><thead><tr>${headers.map(cell => `<th>${formatAnswerInline(cell)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${headers.map((_, index) => `<td>${formatAnswerInline(row[index] || '')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+      }
+    }
+    if (lines.every(line => /^[-•*]\s+/.test(line))) return `<ul>${lines.map(line => `<li>${formatAnswerInline(line.replace(/^[-•*]\s+/, ''))}</li>`).join('')}</ul>`;
+    if (/^#{1,3}\s/.test(lines[0])) return `<h3>${formatAnswerInline(lines.join(' ').replace(/^#{1,3}\s+/, ''))}</h3>`;
+    return `<p>${lines.map(formatAnswerInline).join('<br>')}</p>`;
+  }).join('');
+};
+
+function wireCitationLinks(root) {
+  root.querySelectorAll('.answer-sources .evidence').forEach((source, index) => { source.id = `citation-source-${index + 1}`; });
+  root.querySelectorAll('.citation-link').forEach(link => {
+    link.addEventListener('click', event => {
+      const target = document.querySelector(link.getAttribute('href'));
+      if (!target) return;
+      event.preventDefault();
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      target.classList.add('citation-target');
+      window.setTimeout(() => target.classList.remove('citation-target'), 1800);
+    });
+  });
 }
 
 initAuth = async function initPublicAccess() {

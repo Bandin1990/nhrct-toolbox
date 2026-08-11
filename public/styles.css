@@ -62,3 +62,21 @@
   .history-row{grid-template-columns:1fr;gap:6px}
   .history-row span:last-child{text-align:left}
 }
+
+/* Answer readability, references and narrow-screen input safety. */
+.citation-link{color:#0e7564;font-weight:800;text-decoration:none;white-space:nowrap;border-radius:4px;padding:0 2px}
+.citation-link:hover,.citation-link:focus-visible{background:#dff1ea;text-decoration:underline;outline:0}
+.citation-target{outline:2px solid #d89b2b;outline-offset:3px;box-shadow:0 0 0 6px rgba(216,155,43,.14)}
+.result-summary strong{color:#164f45;font-weight:800}
+.answer-table-wrap{max-width:100%;-webkit-overflow-scrolling:touch}
+.answer-table{table-layout:auto}
+.answer-table th,.answer-table td{overflow-wrap:anywhere;word-break:normal}
+@media (max-width:480px){
+  .profile{gap:5px}
+  .about-link{font-size:12px;padding:6px 4px}
+  .search-label{align-items:flex-start;line-height:1.45}
+  .search-panel textarea{min-height:132px;padding:10px 0;font-size:16px}
+  .search-footer{position:static!important}
+  .search-footer .search-btn{position:static!important;margin:0}
+  .answer-table{min-width:520px}
+}
